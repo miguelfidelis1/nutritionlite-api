@@ -1,13 +1,14 @@
 const sql = require('mssql');
+require('dotenv').config();
 
 const config = {
-  user: 'nl_admin',
-  password: 'Nutrition@2025', // troca aqui pela sua senha real, sem as chaves {}
-  server: 'nutritionlite-server.database.windows.net',
-  database: 'Nldatabase', // atenção ao "L" maiúsculo/minúsculo, confirma o nome no Azure
-  port: 1433,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  server: process.env.DB_SERVER,
+  database: process.env.DB_NAME,
+  port: parseInt(process.env.DB_PORT || '1433'),
   options: {
-    encrypt: true, // obrigatório no Azure
+    encrypt: true, // Azure exige isso
     trustServerCertificate: false
   }
 };
@@ -24,4 +25,3 @@ module.exports = {
   pool,
   sql
 };
-
