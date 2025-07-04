@@ -105,11 +105,7 @@ const deletarFicha = async (req, res) => {
       return res.status(400).json({ mensagem: 'ID inválido.' });
     }
 
-    await poolConnect;
-    const request = pool.request();
-
-    // Verifica se a ficha existe e pertence ao usuário
-    const verifica = await request
+    const verifica = await pool.request()
       .input('id', sql.Int, fichaId)
       .input('usuario_id', sql.Int, usuarioId)
       .query('SELECT * FROM fichaAlimentar WHERE id = @id AND usuario_id = @usuario_id');
@@ -118,8 +114,8 @@ const deletarFicha = async (req, res) => {
       return res.status(404).json({ mensagem: 'Ficha não encontrada ou não pertence ao usuário.' });
     }
 
-    // Deleta a ficha
-    await request
+    // Novo request para deletar
+    await pool.request()
       .input('id', sql.Int, fichaId)
       .query('DELETE FROM fichaAlimentar WHERE id = @id');
 
