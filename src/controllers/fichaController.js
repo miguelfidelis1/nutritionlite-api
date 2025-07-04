@@ -96,7 +96,43 @@ const listarFichas = async (req, res) => {
   }
 };
 
+const deletarFicha = async (req, res) => {
+  try {
+    const usuarioId = req.usuario.id;
+    const fichaId = parseInt(req.params.id);
+
+    if (isNaN(fichaId)) {
+      return res.status(400).json({ mensagem: 'ID inválido.' });
+    }
+
+    await poolConnect;
+    const request = pool.request();
+
+    // Verifica se a ficha existe e pertence ao usuário
+    const verifica = await request
+      .input('id', sql.Int, fichaId)
+      .input('usuario_id', sql.Int, usuarioId)
+      .query('SELECT * FROM fichaAlimentar WHERE id = @id AND usuario_id = @usuario_id');
+
+    if (verifica.recordset.length === 0) {
+      return res.status(404).json({ mensagem: 'Ficha não encontrada ou não pertence ao usuário.' });
+    }
+
+    // Deleta a ficha
+    await request
+      .input('id', sql.Int, fichaId)
+      .query('DELETE FROM fichaAlimentar WHERE id = @id');
+
+    return res.status(200).json({ mensagem: 'Ficha deletada com sucesso!' });
+
+  } catch (error) {
+    console.error('Erro ao deletar ficha:', error);
+    return res.status(500).json({ mensagem: 'Erro interno ao deletar ficha.' });
+  }
+};
+
 module.exports = {
   criarFicha,
-  listarFichas
+  listarFichas,
+  deletarFicha
 };

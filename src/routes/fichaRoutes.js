@@ -6,5 +6,7 @@ const authMiddleware = require('../middlewares/authMiddlewares');
 
 router.post('/refeicao', authMiddleware, fichaController.criarFicha);
 router.get ('/', authMiddleware, fichaController.listarFichas);
+router.delete('/:id', authMiddleware, fichaController.deletarFicha);
+
 
 module.exports = router;
