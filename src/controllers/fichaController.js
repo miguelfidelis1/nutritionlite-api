@@ -42,7 +42,6 @@ const criarFicha = async (req, res) => {
       total_fibra += parseToFloat(item.fibra_alimentar);
     });
 
-    // Arredondar os valores antes de salvar e exibir
     total_kcal = parseFloat(total_kcal.toFixed(2));
     total_proteina = parseFloat(total_proteina.toFixed(2));
     total_carboidratos = parseFloat(total_carboidratos.toFixed(2));
@@ -114,7 +113,6 @@ const deletarFicha = async (req, res) => {
       return res.status(404).json({ mensagem: 'Ficha não encontrada ou não pertence ao usuário.' });
     }
 
-    // Novo request para deletar
     await pool.request()
       .input('id', sql.Int, fichaId)
       .query('DELETE FROM fichaAlimentar WHERE id = @id');
@@ -129,45 +127,41 @@ const deletarFicha = async (req, res) => {
 
 const recomendarDieta = async (req, res) => {
   const { objetivo } = req.body;
-  const usuarioId = req.usuario.id;
 
   try {
     await poolConnect;
     const request = pool.request();
+    const result = await request.query('SELECT * FROM tbltacoNL');
+    const alimentos = result.recordset;
 
-    let query = '';
+    let recomendados = [];
 
     if (objetivo === 'perder_peso') {
-      query = `
-        SELECT TOP 5 * FROM tbltacoNL
-        WHERE energia_kcal < 100 AND lipideos < 5
-        ORDER BY proteina DESC
-      `;
+      recomendados = alimentos.filter(item =>
+        parseToFloat(item.energia_kcal) < 100 &&
+        parseToFloat(item.lipideos) < 5
+      ).sort((a, b) => parseToFloat(b.proteina) - parseToFloat(a.proteina));
     } else if (objetivo === 'ganhar_massa') {
-      query = `
-        SELECT TOP 5 * FROM tbltacoNL
-        WHERE proteina > 10 AND energia_kcal > 150
-        ORDER BY proteina DESC
-      `;
+      recomendados = alimentos.filter(item =>
+        parseToFloat(item.proteina) > 10 &&
+        parseToFloat(item.energia_kcal) > 150
+      ).sort((a, b) => parseToFloat(b.proteina) - parseToFloat(a.proteina));
     } else if (objetivo === 'manter_saude') {
-      query = `
-        SELECT TOP 5 * FROM tbltacoNL
-        WHERE fibra_alimentar >= 2 AND sodio < 500
-        ORDER BY energia_kcal
-      `;
+      recomendados = alimentos.filter(item =>
+        parseToFloat(item.fibra_alimentar) >= 2 &&
+        parseToFloat(item.sodio) < 500
+      ).sort((a, b) => parseToFloat(a.energia_kcal) - parseToFloat(b.energia_kcal));
     } else {
       return res.status(400).json({ mensagem: 'Objetivo inválido.' });
     }
 
-    const result = await request.query(query);
-    return res.status(200).json({ alimentos_recomendados: result.recordset });
+    return res.status(200).json({ alimentos_recomendados: recomendados.slice(0, 5) });
 
   } catch (error) {
     console.error('Erro ao recomendar dieta:', error);
     return res.status(500).json({ mensagem: 'Erro interno ao recomendar dieta.' });
   }
 };
-
 
 module.exports = {
   criarFicha,
