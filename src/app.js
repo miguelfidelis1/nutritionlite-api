@@ -14,7 +14,7 @@ const alimentosRoutes = require('./routes/alimentosRoutes');
 const fichaRoutes = require('./routes/fichaRoutes');
 const testeConexaoRoutes = require('./routes/testeConexaoRoutes');
 
-
+app.set('trust proxy', 1);
 app.use('/api/usuarios', userRoutes);
 app.use('/api/alimentos', alimentosRoutes);
 app.use('/api/ficha', fichaRoutes);
