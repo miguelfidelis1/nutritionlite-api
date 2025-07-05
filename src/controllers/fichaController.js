@@ -127,8 +127,51 @@ const deletarFicha = async (req, res) => {
   }
 };
 
+const recomendarDieta = async (req, res) => {
+  const { objetivo } = req.body;
+  const usuarioId = req.usuario.id;
+
+  try {
+    await poolConnect;
+    const request = pool.request();
+
+    let query = '';
+
+    if (objetivo === 'perder_peso') {
+      query = `
+        SELECT TOP 5 * FROM tbltacoNL
+        WHERE energia_kcal < 100 AND lipideos < 5
+        ORDER BY proteina DESC
+      `;
+    } else if (objetivo === 'ganhar_massa') {
+      query = `
+        SELECT TOP 5 * FROM tbltacoNL
+        WHERE proteina > 10 AND energia_kcal > 150
+        ORDER BY proteina DESC
+      `;
+    } else if (objetivo === 'manter_saude') {
+      query = `
+        SELECT TOP 5 * FROM tbltacoNL
+        WHERE fibra_alimentar >= 2 AND sodio < 500
+        ORDER BY energia_kcal
+      `;
+    } else {
+      return res.status(400).json({ mensagem: 'Objetivo inválido.' });
+    }
+
+    const result = await request.query(query);
+    return res.status(200).json({ alimentos_recomendados: result.recordset });
+
+  } catch (error) {
+    console.error('Erro ao recomendar dieta:', error);
+    return res.status(500).json({ mensagem: 'Erro interno ao recomendar dieta.' });
+  }
+};
+
+
 module.exports = {
   criarFicha,
   listarFichas,
-  deletarFicha
+  deletarFicha,
+  recomendarDieta
 };
