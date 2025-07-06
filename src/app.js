@@ -12,9 +12,8 @@ if (process.env.SENTRY_DSN) {
     tracesSampleRate: 1.0,
     environment: process.env.NODE_ENV || 'development',
   });
-  
-  // Middleware do Sentry apenas se inicializado e Handlers existir
-  if (Sentry.Handlers && Sentry.Handlers.requestHandler) {
+
+  if (Sentry.Handlers?.requestHandler) {
     app.use(Sentry.Handlers.requestHandler());
   }
 }
@@ -31,14 +30,10 @@ app.use('/api/alimentos', require('./routes/alimentosRoutes'));
 app.use('/api/ficha', require('./routes/fichaRoutes'));
 app.use('/api/teste', require('./routes/testeConexaoRoutes'));
 
-// Middleware de erro do Sentry apenas se inicializado e Handlers existir
-if (process.env.SENTRY_DSN && Sentry.Handlers && Sentry.Handlers.errorHandler) {
+// Middleware de erro do Sentry se estiver habilitado
+if (process.env.SENTRY_DSN && Sentry.Handlers?.errorHandler) {
   app.use(Sentry.Handlers.errorHandler());
 }
-
-app.get('/debug-sentry', () => {
-  throw new Error('💥 Teste de erro enviado pro Sentry!');
-});
 
 app.get('/', (req, res) => {
   res.send('Bem vindo à API NutritionLite');
