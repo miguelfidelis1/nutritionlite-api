@@ -1,5 +1,5 @@
 require('dotenv').config();
-const app = require('./app');
+const app = require('./src/app');
 const Sentry = require('./src/config/sentry');
 
 app.use(Sentry.Handlers.requestHandler());
