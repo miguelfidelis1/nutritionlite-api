@@ -28,7 +28,7 @@ app.use('/api/teste', require('./routes/testeConexaoRoutes'));
 app.use(Sentry.Handlers.errorHandler());
 
 app.get('/debug-sentry', () => {
-  throw new Error('💥 Teste de erro enviado pro Sentry!');
+  throw new Error('💥 Teste de erro enviado pro Sentry! Logs: ');
 });
 
 app.get('/', (req, res) => {
