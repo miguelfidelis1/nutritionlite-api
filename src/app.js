@@ -3,43 +3,36 @@ const app = express();
 const cors = require('cors');
 const { limiteGeral } = require('./middlewares/rateLimiter');
 
-// Correto para usar os Handlers
 const Sentry = require('@sentry/node');
-const Tracing = require('@sentry/tracing');
 
 Sentry.init({
   dsn: process.env.SENTRY_DSN,
   tracesSampleRate: 1.0,
-  environment: "production",
+  environment: process.env.NODE_ENV || 'development',
 });
+
+app.set('trust proxy', 1); // Importante pro rate limiter no Render
+app.use(Sentry.Handlers.requestHandler());
 
 app.use(cors());
 app.use(express.json());
-app.use(Sentry.Handlers.requestHandler()); // Agora funciona
-
 app.use(limiteGeral);
 
-const userRoutes = require('./routes/userRoutes');
-const alimentosRoutes = require('./routes/alimentosRoutes');
-const fichaRoutes = require('./routes/fichaRoutes');
-const testeConexaoRoutes = require('./routes/testeConexaoRoutes');
+// Suas rotas
+app.use('/api/usuarios', require('./routes/userRoutes'));
+app.use('/api/alimentos', require('./routes/alimentosRoutes'));
+app.use('/api/ficha', require('./routes/fichaRoutes'));
+app.use('/api/teste', require('./routes/testeConexaoRoutes'));
 
-app.set('trust proxy', 1);
-
-app.use('/api/usuarios', userRoutes);
-app.use('/api/alimentos', alimentosRoutes);
-app.use('/api/ficha', fichaRoutes);
-app.use('/api/teste', testeConexaoRoutes);
-
-// Sentry captura erros
+// Middleware de erro do Sentry
 app.use(Sentry.Handlers.errorHandler());
 
-app.get('/debug-sentry', (req, res) => {
-  throw new Error('💥 Teste de erro do Sentry!');
+app.get('/debug-sentry', () => {
+  throw new Error('💥 Teste de erro enviado pro Sentry!');
 });
 
 app.get('/', (req, res) => {
-  res.send('Bem vindo a API NutritionLite');
+  res.send('Bem vindo à API NutritionLite');
 });
 
 module.exports = app;
