@@ -2,6 +2,15 @@ const express = require('express');
 const app = express();
 const cors = require('cors');
 const { limiteGeral } = require('./middlewares/rateLimiter');
+const Sentry = require('@sentry/node');
+const Tracing = require("@sentry/tracing");
+
+Sentry.init({
+  dsn: process.env.SENTRY_DSN,
+  tracesSampleRate: 1.0,
+  environment: "production",
+});
+
 
 app.use(cors());
 app.use(express.json());
