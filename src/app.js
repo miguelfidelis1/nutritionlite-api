@@ -7,7 +7,7 @@ const { limiteGeral } = require('./middlewares/rateLimiter');
 const Sentry = require('@sentry/node');
 const Tracing = require('@sentry/tracing');
 
-SentryNode.init({
+Sentry.init({
   dsn: process.env.SENTRY_DSN,
   tracesSampleRate: 1.0,
   environment: "production",
