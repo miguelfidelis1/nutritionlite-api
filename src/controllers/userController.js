@@ -104,8 +104,6 @@ const loginUsuario = async (req, res) => {
         }
     };
 
-    throw new Error("💣 Simulação de erro no controller");
-
     
 module.exports = {
     cadastrarUsuario,
