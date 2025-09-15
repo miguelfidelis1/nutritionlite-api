@@ -1,6 +1,5 @@
 const { body } = require('express-validator');
 
-// Validação para o cadastro
 const validarCadastroUsuario = [
   body('nome')
     .notEmpty()
@@ -13,7 +12,6 @@ const validarCadastroUsuario = [
     .withMessage('A senha deve ter pelo menos 6 caracteres')
 ];
 
-// Validação para o login
 const validarLogin = [
   body('email')
     .isEmail()

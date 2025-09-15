@@ -4,7 +4,7 @@ const { poolConnect, pool } = require('../config/db');
 
 router.get('/conexao', async (req, res) => {
   try {
-    await poolConnect; // Aqui está o erro! NÃO use () depois de poolConnect
+    await poolConnect;
     const result = await pool.request().query('SELECT GETDATE() AS dataHora');
     res.json({
       mensagem: 'Conexão com o banco de dados funcionando!',
