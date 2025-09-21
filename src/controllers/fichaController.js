@@ -1,26 +1,31 @@
 const { poolConnect, pool, sql } = require('../config/db');
+const { validationResult } = require('express-validator');
 
-// Função auxiliar pra converter string com vírgula em número decimal
+
 const parseToFloat = (value) => {
   if (!value) return 0;
   return parseFloat(String(value).replace(',', '.'));
 };
 
 const criarFicha = async (req, res) => {
+  const erros = validationResult(req);
+  if (!erros.isEmpty()) {
+    return res.status(400).json({ erros: erros.array() });
+  }
+
   try {
     const { alimentos, objetivo } = req.body;
     const usuarioId = req.usuario.id;
 
-    if (!alimentos || !Array.isArray(alimentos) || alimentos.length === 0 || !objetivo) {
-      return res.status(400).json({ mensagem: 'Alimentos e objetivo são obrigatórios' });
-    }
-
     await poolConnect;
     const request = pool.request();
 
-    const nomesFormatados = alimentos.map(nome => `'${nome}'`).join(', ');
-    const query = `SELECT * FROM tbltacoNL WHERE nome_alimento IN (${nomesFormatados})`;
+    const nomesFormatados = alimentos.map((_, i) => `@alimento${i}`).join(', ');
+    alimentos.forEach((nome, i) => {
+      request.input(`alimento${i}`, sql.VarChar, nome);
+    });
 
+    const query = `SELECT * FROM tbltacoNL WHERE nome_alimento IN (${nomesFormatados})`;
     const result = await request.query(query);
     const lista = result.recordset;
 
@@ -29,12 +34,12 @@ const criarFicha = async (req, res) => {
     }
 
     let total_kcal = 0,
-        total_proteina = 0,
-        total_carboidratos = 0,
-        total_gordura = 0,
-        total_fibra = 0;
+      total_proteina = 0,
+      total_carboidratos = 0,
+      total_gordura = 0,
+      total_fibra = 0;
 
-    lista.forEach(item => {
+    lista.forEach((item) => {
       total_kcal += parseToFloat(item.energia_kcal);
       total_proteina += parseToFloat(item.proteina);
       total_carboidratos += parseToFloat(item.carboidratos);
@@ -68,12 +73,11 @@ const criarFicha = async (req, res) => {
       total_proteina,
       total_carboidratos,
       total_gordura,
-      total_fibra
+      total_fibra,
     });
-
   } catch (error) {
     console.error('Erro ao criar ficha alimentar:', error);
-    return res.status(500).json({ mensagem: 'Erro interno ao criar a ficha alimentar' });
+    return res.status(500).json({ mensagem: 'Erro interno ao criar a ficha alimentar.' });
   }
 };
 
@@ -90,19 +94,20 @@ const listarFichas = async (req, res) => {
 
     return res.status(200).json(result.recordset);
   } catch (error) {
-    console.error('Erro ao listar fichas', error);
+    console.error('Erro ao listar fichas:', error);
     return res.status(500).json({ mensagem: 'Erro ao buscar fichas alimentares.' });
   }
 };
 
 const deletarFicha = async (req, res) => {
+  const erros = validationResult(req);
+  if (!erros.isEmpty()) {
+    return res.status(400).json({ erros: erros.array() });
+  }
+
   try {
     const usuarioId = req.usuario.id;
     const fichaId = parseInt(req.params.id);
-
-    if (isNaN(fichaId)) {
-      return res.status(400).json({ mensagem: 'ID inválido.' });
-    }
 
     const verifica = await pool.request()
       .input('id', sql.Int, fichaId)
@@ -118,7 +123,6 @@ const deletarFicha = async (req, res) => {
       .query('DELETE FROM fichaAlimentar WHERE id = @id');
 
     return res.status(200).json({ mensagem: 'Ficha deletada com sucesso!' });
-
   } catch (error) {
     console.error('Erro ao deletar ficha:', error);
     return res.status(500).json({ mensagem: 'Erro interno ao deletar ficha.' });
@@ -126,6 +130,11 @@ const deletarFicha = async (req, res) => {
 };
 
 const recomendarDieta = async (req, res) => {
+  const erros = validationResult(req);
+  if (!erros.isEmpty()) {
+    return res.status(400).json({ erros: erros.array() });
+  }
+
   const { objetivo } = req.body;
 
   try {
@@ -137,26 +146,20 @@ const recomendarDieta = async (req, res) => {
     let recomendados = [];
 
     if (objetivo === 'perder_peso') {
-      recomendados = alimentos.filter(item =>
-        parseToFloat(item.energia_kcal) < 100 &&
-        parseToFloat(item.lipideos) < 5
-      ).sort((a, b) => parseToFloat(b.proteina) - parseToFloat(a.proteina));
+      recomendados = alimentos
+        .filter((item) => parseToFloat(item.energia_kcal) < 100 && parseToFloat(item.lipideos) < 5)
+        .sort((a, b) => parseToFloat(b.proteina) - parseToFloat(a.proteina));
     } else if (objetivo === 'ganhar_massa') {
-      recomendados = alimentos.filter(item =>
-        parseToFloat(item.proteina) > 10 &&
-        parseToFloat(item.energia_kcal) > 150
-      ).sort((a, b) => parseToFloat(b.proteina) - parseToFloat(a.proteina));
+      recomendados = alimentos
+        .filter((item) => parseToFloat(item.proteina) > 10 && parseToFloat(item.energia_kcal) > 150)
+        .sort((a, b) => parseToFloat(b.proteina) - parseToFloat(a.proteina));
     } else if (objetivo === 'manter_saude') {
-      recomendados = alimentos.filter(item =>
-        parseToFloat(item.fibra_alimentar) >= 2 &&
-        parseToFloat(item.sodio) < 500
-      ).sort((a, b) => parseToFloat(a.energia_kcal) - parseToFloat(b.energia_kcal));
-    } else {
-      return res.status(400).json({ mensagem: 'Objetivo inválido.' });
+      recomendados = alimentos
+        .filter((item) => parseToFloat(item.fibra_alimentar) >= 2 && parseToFloat(item.sodio) < 500)
+        .sort((a, b) => parseToFloat(a.energia_kcal) - parseToFloat(b.energia_kcal));
     }
 
     return res.status(200).json({ alimentos_recomendados: recomendados.slice(0, 5) });
-
   } catch (error) {
     console.error('Erro ao recomendar dieta:', error);
     return res.status(500).json({ mensagem: 'Erro interno ao recomendar dieta.' });
@@ -167,5 +170,5 @@ module.exports = {
   criarFicha,
   listarFichas,
   deletarFicha,
-  recomendarDieta
+  recomendarDieta,
 };

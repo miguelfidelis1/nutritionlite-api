@@ -4,6 +4,12 @@ const cors = require('cors');
 const { limiteGeral } = require('./middlewares/rateLimiter');
 const { swaggerUi, specs } = require('./swagger');
 
+const userRoutes = require('./routes/userRoutes');
+const alimentosRoutes = require('./routes/alimentosRoutes');
+const fichaRoutes = require('./routes/fichaRoutes');
+const testeConexaoRoutes = require('./routes/testeConexaoRoutes');
+const chatRoutes = require('./routes/chatRoutes');
+
 const Sentry = require('@sentry/node');
 
 if (process.env.SENTRY_DSN) {
@@ -24,11 +30,13 @@ app.use(cors());
 app.use(express.json());
 app.use(limiteGeral);
 
-app.use('/api/usuarios', require('./routes/userRoutes'));
-app.use('/api/alimentos', require('./routes/alimentosRoutes'));
-app.use('/api/ficha', require('./routes/fichaRoutes'));
-app.use('/api/teste', require('./routes/testeConexaoRoutes'));
-app.use('/api/chat', require('./routes/chatRoutes'));
+// Usar todas as rotas com seus prefixos
+app.use('/api/usuarios', userRoutes);
+app.use('/api/alimentos', alimentosRoutes);
+app.use('/api/ficha', fichaRoutes);
+app.use('/api/teste', testeConexaoRoutes);
+app.use('/api/chat', require ('./routes/chatRoutes')); // Usar a variável importada
+console.log("🚀 Rota /api/chat registrada");
 
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
 

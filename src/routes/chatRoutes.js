@@ -2,6 +2,6 @@ const express = require('express');
 const router = express.Router();
 const { conversarComIA } = require('../controllers/chatController');
 
-router.post('/chat', conversarComIA);
+router.post('/', conversarComIA);
 
 module.exports = router;
