@@ -39,8 +39,6 @@ const respostasComuns = [
   { pergunta: /como controlar ansiedade por comida/i, resposta: "Planejamento de refeições, lanches saudáveis e técnicas de respiração podem ajudar a controlar a fome emocional." }
 ];
 
-
-// Função para salvar histórico
 const salvarHistorico = async (usuarioId, mensagem, resposta, pool) => {
   await pool
     .request()
@@ -51,7 +49,6 @@ const salvarHistorico = async (usuarioId, mensagem, resposta, pool) => {
             VALUES (@usuario_id, @mensagem, @resposta)`);
 };
 
-// Função para buscar alimentos
 const buscarAlimentos = async (mensagem, pool) => {
   const resultado = await pool
     .request()
@@ -69,7 +66,6 @@ const buscarAlimentos = async (mensagem, pool) => {
   }));
 };
 
-// Função para formatar ficha
 const formatarFicha = (ficha) => {
   if (!ficha) return "O usuário não possui ficha alimentar registrada.";
   return `Objetivo: ${ficha.objetivo}
@@ -88,7 +84,6 @@ const conversarComIA = async (req, res) => {
   }
 
   try {
-    // 1️⃣ Resposta pronta
     const respostaPronta = respostasComuns.find(item => item.pergunta.test(mensagem));
     if (respostaPronta) {
       return res.status(200).json({ resposta: respostaPronta.resposta });
@@ -96,20 +91,17 @@ const conversarComIA = async (req, res) => {
 
     const pool = await poolConnect;
 
-    // 2️⃣ Buscar ficha do usuário
     const fichaResult = await pool
       .request()
       .input("usuario_id", sql.Int, userId)
       .query("SELECT TOP 1 * FROM fichaAlimentar WHERE usuario_id = @usuario_id");
     const fichaInfo = fichaResult.recordset.length > 0 ? formatarFicha(fichaResult.recordset[0]) : formatarFicha(null);
 
-    // 3️⃣ Buscar alimentos no banco
     const alimentos = await buscarAlimentos(mensagem, pool);
     let alimentosInfo = alimentos.length > 0
       ? "Alimentos encontrados no banco:\n" + alimentos.map(a => `- ${a.descricao}: ${a.kcal} kcal, ${a.proteina}g proteínas, ${a.carboidrato}g carboidratos, ${a.gordura}g gorduras`).join("\n")
       : "";
 
-    // 4️⃣ Montar prompt e enviar para IA
     const prompt = `
 Você é Salus, um(a) nutricionista virtual inteligente, criado para promover saúde, bem-estar e alimentação acessível.  
 Responda com base apenas nas informações fornecidas abaixo.  
@@ -132,7 +124,6 @@ ${alimentosInfo}
     const result = await model.generateContent(prompt);
     const resposta = result.response.text();
 
-    // 5️⃣ Salvar histórico
     await salvarHistorico(userId, mensagem, resposta, pool);
 
     return res.status(200).json({ resposta });
