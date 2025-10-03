@@ -2,7 +2,7 @@ const { poolConnect, pool, sql } = require('../config/db');
 
 const listarAlimentos = async (req, res) => {
   try {
-    await poolConnect;
+    await poolConnect; // garante conexão
     const request = pool.request();
     const result = await request.query('SELECT * FROM tbltacoNL');
     return res.status(200).json(result.recordset);
@@ -20,7 +20,7 @@ const buscarAlimentosPorNome = async (req, res) => {
       return res.status(400).json({ mensagem: 'Informe o nome do alimento.' });
     }
 
-    await poolConnect;
+    await poolConnect; // garante conexão
     const request = pool.request();
     const result = await request
       .input('nome', sql.VarChar, `%${nome}%`)

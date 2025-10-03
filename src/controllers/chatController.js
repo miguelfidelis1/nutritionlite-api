@@ -1,6 +1,6 @@
 require("dotenv").config();
 const { GoogleGenerativeAI } = require("@google/generative-ai");
-const { poolConnect, sql } = require("../config/db.js");
+const { poolConnect, pool, sql } = require("../config/db.js");
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: process.env.GEMINI_MODEL || "gemini-1.5-flash-latest" });
@@ -39,19 +39,23 @@ const respostasComuns = [
   { pergunta: /como controlar ansiedade por comida/i, resposta: "Planejamento de refeições, lanches saudáveis e técnicas de respiração podem ajudar a controlar a fome emocional." }
 ];
 
-const salvarHistorico = async (usuarioId, mensagem, resposta, pool) => {
-  await pool
-    .request()
+const salvarHistorico = async (usuarioId, mensagem, resposta) => {
+  await poolConnect;
+  const request = pool.request();
+  await request
     .input("usuario_id", sql.Int, usuarioId)
     .input("mensagem", sql.NVarChar, mensagem)
     .input("resposta", sql.NVarChar, resposta)
-    .query(`INSERT INTO chatHistorico (usuario_id, mensagem, resposta) 
-            VALUES (@usuario_id, @mensagem, @resposta)`);
+    .query(`
+      INSERT INTO chatHistorico (usuario_id, mensagem, resposta) 
+      VALUES (@usuario_id, @mensagem, @resposta)
+    `);
 };
 
-const buscarAlimentos = async (mensagem, pool) => {
-  const resultado = await pool
-    .request()
+const buscarAlimentos = async (mensagem) => {
+  await poolConnect;
+  const request = pool.request();
+  const resultado = await request
     .input("nome", sql.VarChar, `%${mensagem}%`)
     .query("SELECT TOP 5 * FROM tbltacoNL WHERE nome_alimento LIKE @nome");
 
@@ -59,10 +63,10 @@ const buscarAlimentos = async (mensagem, pool) => {
   return resultado.recordset.map(a => ({
     nome: a.nome_alimento,
     descricao: a.descricao,
-    kcal: a.kcal,
+    kcal: a.energia_kcal,
     proteina: a.proteina,
-    carboidrato: a.carboidrato,
-    gordura: a.gordura
+    carboidrato: a.carboidratos,
+    gordura: a.lipideos
   }));
 };
 
@@ -84,53 +88,58 @@ const conversarComIA = async (req, res) => {
   }
 
   try {
+    // checa respostas pré-definidas
     const respostaPronta = respostasComuns.find(item => item.pergunta.test(mensagem));
     if (respostaPronta) {
       return res.status(200).json({ resposta: respostaPronta.resposta });
     }
 
-    const pool = await poolConnect;
+    await poolConnect;
+    const request = pool.request();
 
-    const fichaResult = await pool
-      .request()
+    // ficha do usuário
+    const fichaResult = await request
       .input("usuario_id", sql.Int, userId)
       .query("SELECT TOP 1 * FROM fichaAlimentar WHERE usuario_id = @usuario_id");
+
     const fichaInfo = fichaResult.recordset.length > 0 ? formatarFicha(fichaResult.recordset[0]) : formatarFicha(null);
 
-    const alimentos = await buscarAlimentos(mensagem, pool);
+    // alimentos no banco
+    const alimentos = await buscarAlimentos(mensagem);
     let alimentosInfo = alimentos.length > 0
       ? "Alimentos encontrados no banco:\n" + alimentos.map(a => `- ${a.descricao}: ${a.kcal} kcal, ${a.proteina}g proteínas, ${a.carboidrato}g carboidratos, ${a.gordura}g gorduras`).join("\n")
       : "";
 
-    const prompt = `
-Você é Salus, um(a) nutricionista virtual inteligente, criado para promover saúde, bem-estar e alimentação acessível.  
-Responda com base apenas nas informações fornecidas abaixo.  
-Seja amigável, direto(a), objetivo(a) e evite usar linguagem técnica demais.  
-Sempre que possível, leve em conta o objetivo nutricional do usuário e os alimentos encontrados no banco de dados.  
-Não invente dados externos, só quando necessário — foque no que foi informado!  
-Se o usuário não tiver uma ficha alimentar, responda sugerindo criar uma ou continuar sem ela.  
-Se o usuário perguntar sobre algo fora de Nutrição ou Saúde, responda que não foi programada para isso.
-
-------------------  
-📌 Ficha do usuário:  
-${fichaInfo}  
-
-📌 Alimentos encontrados:  
-${alimentosInfo}  
-
-❓ Pergunta do usuário: ${mensagem}
-    `;
-
-    const result = await model.generateContent(prompt);
-    const resposta = result.response.text();
-
-    await salvarHistorico(userId, mensagem, resposta, pool);
-
-    return res.status(200).json({ resposta });
-  } catch (error) {
-    console.error("Erro ao conversar com a IA:", error);
-    return res.status(500).json({ mensagem: "Erro ao gerar resposta da IA." });
-  }
-};
-
-module.exports = { conversarComIA };
+      const prompt = `
+      Você é Salus, um(a) nutricionista virtual inteligente, criado para promover saúde, bem-estar e alimentação acessível.  
+      Responda com base apenas nas informações fornecidas abaixo.  
+      Seja amigável, direto(a), objetivo(a) e evite usar linguagem técnica demais.  
+      Sempre que possível, leve em conta o objetivo nutricional do usuário e os alimentos encontrados no banco de dados.  
+      Não invente dados externos, só quando necessário — foque no que foi informado!  
+      Se o usuário não tiver uma ficha alimentar, responda sugerindo criar uma ou continuar sem ela.  
+      Se o usuário perguntar sobre algo fora de Nutrição ou Saúde, responda que não foi programada para isso.
+      
+      ------------------  
+      📌 Ficha do usuário:  
+      ${fichaInfo}  
+      
+      📌 Alimentos encontrados:  
+      ${alimentosInfo}  
+      
+      ❓ Pergunta do usuário: ${mensagem}
+          `;
+      
+          const result = await model.generateContent(prompt);
+          const resposta = result.response.text();
+      
+          await salvarHistorico(userId, mensagem, resposta, pool);
+      
+          return res.status(200).json({ resposta });
+        } catch (error) {
+          console.error("Erro ao conversar com a IA:", error);
+          return res.status(500).json({ mensagem: "Erro ao gerar resposta da IA." });
+        }
+      };
+      
+      module.exports = { conversarComIA };
+      

@@ -121,4 +121,23 @@ router.get('/perfil', authMiddleware, (req, res) => {
   });
 });
 
+// Recuperação de senha
+/**
+ * @swagger
+ * /usuario/forgot-password:
+ *   post:
+ *     summary: Solicita recuperação de senha por e-mail
+ *     tags: [Usuários]
+ */
+router.post("/forgot-password", userController.forgotPassword);
+
+/**
+ * @swagger
+ * /usuario/reset-password:
+ *   post:
+ *     summary: Redefine senha usando token recebido no e-mail
+ *     tags: [Usuários]
+ */
+router.post("/reset-password", userController.resetPassword);
+
 module.exports = router;
