@@ -1,10 +1,13 @@
 require("dotenv").config();
 const { GoogleGenerativeAI } = require("@google/generative-ai");
-const { poolConnect, pool, sql } = require("../config/db.js");
+const { poolPromise, sql } = require("../config/db.js"); // ✅ ajustado
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: process.env.GEMINI_MODEL || "gemini-1.5-flash-latest" });
+const model = genAI.getGenerativeModel({
+  model: process.env.GEMINI_MODEL || "gemini-1.5-flash-latest"
+});
 
+// 🧠 Respostas pré-definidas
 const respostasComuns = [
   { pergunta: /ovo engorda\??/i, resposta: "Não, ovo é uma ótima fonte de proteína e não engorda sozinho. O importante é a quantidade e equilíbrio na dieta." },
   { pergunta: /pão à noite\??/i, resposta: "Pão à noite não é proibido, mas prefira integral e combine com proteínas para saciedade." },
@@ -39,8 +42,9 @@ const respostasComuns = [
   { pergunta: /como controlar ansiedade por comida/i, resposta: "Planejamento de refeições, lanches saudáveis e técnicas de respiração podem ajudar a controlar a fome emocional." }
 ];
 
+// 💾 Salva histórico no banco
 const salvarHistorico = async (usuarioId, mensagem, resposta) => {
-  await poolConnect;
+  const pool = await poolPromise; // ✅ usa poolPromise
   const request = pool.request();
   await request
     .input("usuario_id", sql.Int, usuarioId)
@@ -52,8 +56,9 @@ const salvarHistorico = async (usuarioId, mensagem, resposta) => {
     `);
 };
 
+// 🔎 Busca alimentos por nome
 const buscarAlimentos = async (mensagem) => {
-  await poolConnect;
+  const pool = await poolPromise; // ✅ usa poolPromise
   const request = pool.request();
   const resultado = await request
     .input("nome", sql.VarChar, `%${mensagem}%`)
@@ -70,6 +75,7 @@ const buscarAlimentos = async (mensagem) => {
   }));
 };
 
+// 🧾 Formata ficha alimentar
 const formatarFicha = (ficha) => {
   if (!ficha) return "O usuário não possui ficha alimentar registrada.";
   return `Objetivo: ${ficha.objetivo}
@@ -79,6 +85,7 @@ Carboidratos: ${ficha.total_carboidratos}g
 Gorduras: ${ficha.total_gordura}g`;
 };
 
+// 💬 Controller principal
 const conversarComIA = async (req, res) => {
   const { mensagem } = req.body;
   const userId = req.user?.id || 1;
@@ -88,58 +95,60 @@ const conversarComIA = async (req, res) => {
   }
 
   try {
-    // checa respostas pré-definidas
+    // 🔹 verifica respostas automáticas
     const respostaPronta = respostasComuns.find(item => item.pergunta.test(mensagem));
     if (respostaPronta) {
       return res.status(200).json({ resposta: respostaPronta.resposta });
     }
 
-    await poolConnect;
+    const pool = await poolPromise; // ✅ usa poolPromise
     const request = pool.request();
 
-    // ficha do usuário
+    // 🔹 ficha alimentar
     const fichaResult = await request
       .input("usuario_id", sql.Int, userId)
       .query("SELECT TOP 1 * FROM fichaAlimentar WHERE usuario_id = @usuario_id");
 
-    const fichaInfo = fichaResult.recordset.length > 0 ? formatarFicha(fichaResult.recordset[0]) : formatarFicha(null);
+    const fichaInfo = fichaResult.recordset.length > 0
+      ? formatarFicha(fichaResult.recordset[0])
+      : formatarFicha(null);
 
-    // alimentos no banco
+    // 🔹 alimentos relacionados
     const alimentos = await buscarAlimentos(mensagem);
     let alimentosInfo = alimentos.length > 0
       ? "Alimentos encontrados no banco:\n" + alimentos.map(a => `- ${a.descricao}: ${a.kcal} kcal, ${a.proteina}g proteínas, ${a.carboidrato}g carboidratos, ${a.gordura}g gorduras`).join("\n")
       : "";
 
-      const prompt = `
-      Você é Salus, um(a) nutricionista virtual inteligente, criado para promover saúde, bem-estar e alimentação acessível.  
-      Responda com base apenas nas informações fornecidas abaixo.  
-      Seja amigável, direto(a), objetivo(a) e evite usar linguagem técnica demais.  
-      Sempre que possível, leve em conta o objetivo nutricional do usuário e os alimentos encontrados no banco de dados.  
-      Não invente dados externos, só quando necessário — foque no que foi informado!  
-      Se o usuário não tiver uma ficha alimentar, responda sugerindo criar uma ou continuar sem ela.  
-      Se o usuário perguntar sobre algo fora de Nutrição ou Saúde, responda que não foi programada para isso.
-      
-      ------------------  
-      📌 Ficha do usuário:  
-      ${fichaInfo}  
-      
-      📌 Alimentos encontrados:  
-      ${alimentosInfo}  
-      
-      ❓ Pergunta do usuário: ${mensagem}
-          `;
-      
-          const result = await model.generateContent(prompt);
-          const resposta = result.response.text();
-      
-          await salvarHistorico(userId, mensagem, resposta, pool);
-      
-          return res.status(200).json({ resposta });
-        } catch (error) {
-          console.error("Erro ao conversar com a IA:", error);
-          return res.status(500).json({ mensagem: "Erro ao gerar resposta da IA." });
-        }
-      };
-      
-      module.exports = { conversarComIA };
-      
+    const prompt = `
+Você é Salus, um(a) nutricionista virtual inteligente, criado para promover saúde, bem-estar e alimentação acessível.  
+Responda com base apenas nas informações fornecidas abaixo.  
+Seja amigável, direto(a), objetivo(a) e evite usar linguagem técnica demais.  
+Sempre que possível, leve em conta o objetivo nutricional do usuário e os alimentos encontrados no banco de dados.  
+Não invente dados externos, só quando necessário — foque no que foi informado!  
+Se o usuário não tiver uma ficha alimentar, responda sugerindo criar uma ou continuar sem ela.  
+Se o usuário perguntar sobre algo fora de Nutrição ou Saúde, responda que não foi programada para isso.
+
+
+------------------  
+📌 Ficha do usuário:  
+${fichaInfo}  
+
+📌 Alimentos encontrados:  
+${alimentosInfo}  
+
+❓ Pergunta do usuário: ${mensagem}
+    `;
+
+    const result = await model.generateContent(prompt);
+    const resposta = result.response.text();
+
+    await salvarHistorico(userId, mensagem, resposta);
+
+    return res.status(200).json({ resposta });
+  } catch (error) {
+    console.error("Erro ao conversar com a IA:", error);
+    return res.status(500).json({ mensagem: "Erro ao gerar resposta da IA." });
+  }
+};
+
+module.exports = { conversarComIA };
