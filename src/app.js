@@ -10,6 +10,8 @@ const fichaRoutes = require('./routes/fichaRoutes');
 const testeConexaoRoutes = require('./routes/testeConexaoRoutes');
 const chatRoutes = require('./routes/chatRoutes');
 
+const precoRoutes = require('./routes/precoRoutes');
+
 const Sentry = require('@sentry/node');
 
 if (process.env.SENTRY_DSN) {
@@ -30,14 +32,14 @@ app.use(cors());
 app.use(express.json());
 app.use(limiteGeral);
 
-// Usar todas as rotas com seus prefixos
+
 app.use('/api/usuarios', userRoutes);
 app.use('/api/alimentos', alimentosRoutes);
 app.use('/api/ficha', fichaRoutes);
 app.use('/api/teste', testeConexaoRoutes);
-app.use('/api/chat', require ('./routes/chatRoutes')); // Usar a variável importada
+app.use('/api/chat', require ('./routes/chatRoutes'));
 console.log("🚀 Rota /api/chat registrada");
-
+app.use('/api/preco', precoRoutes);
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
 
 if (process.env.SENTRY_DSN && Sentry.Handlers?.errorHandler) {

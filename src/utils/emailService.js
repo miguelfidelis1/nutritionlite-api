@@ -1,16 +1,15 @@
-// src/utils/emailService.js
 const nodemailer = require("nodemailer");
 
 const transporter = nodemailer.createTransport({
   host: process.env.EMAIL_HOST || "smtp.gmail.com",
   port: parseInt(process.env.EMAIL_PORT || "587", 10),
-  secure: false, // false -> STARTTLS (porta 587)
+  secure: false, 
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
   },
   tls: {
-    rejectUnauthorized: false // permite certificados autoassinados (útil em alguns hosts). Ok pra dev.
+    rejectUnauthorized: false 
   }
 });
 
