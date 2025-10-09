@@ -1,5 +1,5 @@
 const bcrypt = require('bcrypt');
-const { sql, poolPromise } = require('../config/db'); // 🔥 corrigido
+const { sql, poolPromise } = require('../config/db');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const { enviarEmail } = require('../utils/emailService');
@@ -14,7 +14,7 @@ const cadastrarUsuario = async (req, res) => {
     }
 
     const senhaHash = await bcrypt.hash(senha, 10);
-    const pool = await poolPromise; // 🔥 sempre pegar o pool assim
+    const pool = await poolPromise;
 
     await pool.request()
       .input('nome', sql.VarChar, nome)

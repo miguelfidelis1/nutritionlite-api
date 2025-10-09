@@ -1,13 +1,11 @@
 const { validationResult } = require('express-validator');
 const { sql, poolPromise } = require('../config/db');
 
-// Função auxiliar para conversão de valores
 const parseToFloat = (value) => {
   if (!value) return 0;
   return parseFloat(String(value).replace(',', '.'));
 };
 
-// ✅ CRIAR FICHA
 const criarFicha = async (req, res) => {
   const erros = validationResult(req);
   if (!erros.isEmpty()) {
@@ -76,7 +74,6 @@ const criarFicha = async (req, res) => {
   }
 };
 
-// ✅ LISTAR FICHAS
 const listarFichas = async (req, res) => {
   try {
     const usuarioId = req.usuario.id;
@@ -94,7 +91,6 @@ const listarFichas = async (req, res) => {
   }
 };
 
-// ✅ DELETAR FICHA
 const deletarFicha = async (req, res) => {
   try {
     const { id } = req.params;
@@ -121,7 +117,6 @@ const deletarFicha = async (req, res) => {
   }
 };
 
-// ✅ RECOMENDAR DIETA
 const recomendarDieta = async (req, res) => {
   const erros = validationResult(req);
   if (!erros.isEmpty()) {

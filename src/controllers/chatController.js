@@ -1,13 +1,12 @@
 require("dotenv").config();
 const { GoogleGenerativeAI } = require("@google/generative-ai");
-const { poolPromise, sql } = require("../config/db.js"); // ✅ ajustado
+const { poolPromise, sql } = require("../config/db.js");
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({
   model: process.env.GEMINI_MODEL || "gemini-1.5-flash-latest"
 });
 
-// 🧠 Respostas pré-definidas
 const respostasComuns = [
   { pergunta: /ovo engorda\??/i, resposta: "Não, ovo é uma ótima fonte de proteína e não engorda sozinho. O importante é a quantidade e equilíbrio na dieta." },
   { pergunta: /pão à noite\??/i, resposta: "Pão à noite não é proibido, mas prefira integral e combine com proteínas para saciedade." },
@@ -42,9 +41,8 @@ const respostasComuns = [
   { pergunta: /como controlar ansiedade por comida/i, resposta: "Planejamento de refeições, lanches saudáveis e técnicas de respiração podem ajudar a controlar a fome emocional." }
 ];
 
-// 💾 Salva histórico no banco
 const salvarHistorico = async (usuarioId, mensagem, resposta) => {
-  const pool = await poolPromise; // ✅ usa poolPromise
+  const pool = await poolPromise;
   const request = pool.request();
   await request
     .input("usuario_id", sql.Int, usuarioId)
@@ -56,9 +54,8 @@ const salvarHistorico = async (usuarioId, mensagem, resposta) => {
     `);
 };
 
-// 🔎 Busca alimentos por nome
 const buscarAlimentos = async (mensagem) => {
-  const pool = await poolPromise; // ✅ usa poolPromise
+  const pool = await poolPromise;
   const request = pool.request();
   const resultado = await request
     .input("nome", sql.VarChar, `%${mensagem}%`)
@@ -71,11 +68,11 @@ const buscarAlimentos = async (mensagem) => {
     kcal: a.energia_kcal,
     proteina: a.proteina,
     carboidrato: a.carboidratos,
-    gordura: a.lipideos
+    gordura: a.lipideos,
+    preco: a.preco_medio
   }));
 };
 
-// 🧾 Formata ficha alimentar
 const formatarFicha = (ficha) => {
   if (!ficha) return "O usuário não possui ficha alimentar registrada.";
   return `Objetivo: ${ficha.objetivo}
@@ -85,9 +82,9 @@ Carboidratos: ${ficha.total_carboidratos}g
 Gorduras: ${ficha.total_gordura}g`;
 };
 
-// 💬 Controller principal
 const conversarComIA = async (req, res) => {
   const { mensagem } = req.body;
+  const modo = req.body.modo || "normal";
   const userId = req.user?.id || 1;
 
   if (!mensagem) {
@@ -95,16 +92,14 @@ const conversarComIA = async (req, res) => {
   }
 
   try {
-    // 🔹 verifica respostas automáticas
     const respostaPronta = respostasComuns.find(item => item.pergunta.test(mensagem));
     if (respostaPronta) {
       return res.status(200).json({ resposta: respostaPronta.resposta });
     }
 
-    const pool = await poolPromise; // ✅ usa poolPromise
+    const pool = await poolPromise;
     const request = pool.request();
 
-    // 🔹 ficha alimentar
     const fichaResult = await request
       .input("usuario_id", sql.Int, userId)
       .query("SELECT TOP 1 * FROM fichaAlimentar WHERE usuario_id = @usuario_id");
@@ -113,31 +108,82 @@ const conversarComIA = async (req, res) => {
       ? formatarFicha(fichaResult.recordset[0])
       : formatarFicha(null);
 
-    // 🔹 alimentos relacionados
     const alimentos = await buscarAlimentos(mensagem);
     let alimentosInfo = alimentos.length > 0
-      ? "Alimentos encontrados no banco:\n" + alimentos.map(a => `- ${a.descricao}: ${a.kcal} kcal, ${a.proteina}g proteínas, ${a.carboidrato}g carboidratos, ${a.gordura}g gorduras`).join("\n")
+      ? "Alimentos encontrados no banco:\n" + alimentos.map(a =>
+          `- ${a.descricao}: ${a.kcal} kcal, ${a.proteina}g proteínas, ${a.carboidrato}g carboidratos, ${a.gordura}g gorduras, R$${a.preco ? a.preco.toFixed(2) : "N/D"}`
+        ).join("\n")
       : "";
 
-    const prompt = `
-Você é Salus, um(a) nutricionista virtual inteligente, criado para promover saúde, bem-estar e alimentação acessível.  
-Responda com base apenas nas informações fornecidas abaixo.  
-Seja amigável, direto(a), objetivo(a) e evite usar linguagem técnica demais.  
-Sempre que possível, leve em conta o objetivo nutricional do usuário e os alimentos encontrados no banco de dados.  
-Não invente dados externos, só quando necessário — foque no que foi informado!  
-Se o usuário não tiver uma ficha alimentar, responda sugerindo criar uma ou continuar sem ela.  
-Se o usuário perguntar sobre algo fora de Nutrição ou Saúde, responda que não foi programada para isso.
+    let prompt;
+
+    if (modo === "economico") {
+      prompt = `
+Você é Salus, uma IA nutricionista especialista em **alimentação acessível e econômica**.
+Seu foco é sugerir alimentos **nutritivos e com melhor custo-benefício**, utilizando as informações de preço médio (R$) disponíveis no banco de dados.
+Monte refeições saudáveis **com baixo custo**, priorizando alimentos com **menor preço_medio** e boa densidade nutricional.
+Evite alimentos caros ou de difícil acesso.
+Use linguagem simples, empática e com tom de incentivo — mostre que é possível comer bem gastando pouco!
+
+------------------
+📌 Ficha do usuário:
+${fichaInfo}
+
+📌 Alimentos encontrados:
+${alimentosInfo}
+
+❓ Pergunta do usuário:
+${mensagem}
+      `;
+    } else {
+      prompt = `
+Você é a Salus, uma IA nutricional do sistema NutritionLite. 
+Seu papel é conversar de forma natural, direta e educativa com o usuário, ajudando-o a entender melhor sua alimentação e fazer escolhas saudáveis, baseando-se nas informações do banco de dados TACO e na ficha alimentar do usuário.
+
+Suas funções principais:
+- Buscar alimentos no banco de dados (tabela "tbltacoNL") e usar as informações nutricionais reais.
+- Consultar a ficha alimentar do usuário (tabela "fichaAlimentar") para personalizar respostas.
+- Levar em conta o objetivo do usuário (ex: perder peso, ganhar massa, manter saúde).
+
+Caso o usuário pergunte sobre um alimento:
+1. Busque o alimento pelo nome exato no banco.
+2. Se não encontrar, procure por nomes parecidos (ex: "frango temperado" ≈ "frango", "frago" ≈ "frango").
+3. Se ainda assim não encontrar, associe com um alimento semelhante na categoria (ex: "pão de milho" ≈ "pão francês"). 
+(mas tipo assim se baseie no que o usario quer por exemplo quer emagrecer recomende um o alimento que ele pediu , se ele não achar fale "Não achei este alimento, mas existem outras opções, por exemplo...")
+4. Sempre avise o usuário se a resposta for baseada em uma aproximação.
+5. Nunca invente valores — só use dados do banco.
+
+Exemplos de comportamento:
+Usuário: "ovo engorda?"
+IA: "O ovo não engorda por si só. Ele é rico em proteínas e gorduras boas, e o efeito depende da quantidade e preparo."
+Usuário: "posso comer pão à noite?"
+IA: "Pode, mas prefira versões integrais e em pequenas quantidades. Isso ajuda a evitar picos de glicose à noite."
+
+Estilo:
+- Fale de forma natural e objetiva.
+- Evite respostas técnicas demais.
+- Se não tiver informação no banco, explique o motivo e oriente o usuário de forma prática.
+- Seja empática, educativa e sempre transparente.
+
+Regras:
+- Baseie TODAS as respostas nos dados do banco TACO ou ficha do usuário.
+- Se usar aproximações, explique de forma honesta.
+- Nunca invente alimentos inexistentes.
+- Sempre priorize o alimento mais parecido no nome ou categoria.
+- Sempre priorize alimento do banco de dados na tabela tbltacoNL.
 
 
-------------------  
-📌 Ficha do usuário:  
-${fichaInfo}  
+------------------
+📌 Ficha do usuário:
+${fichaInfo}
 
-📌 Alimentos encontrados:  
-${alimentosInfo}  
+📌 Alimentos encontrados:
+${alimentosInfo}
 
-❓ Pergunta do usuário: ${mensagem}
-    `;
+❓ Pergunta do usuário:
+${mensagem}
+      `;
+    }
 
     const result = await model.generateContent(prompt);
     const resposta = result.response.text();

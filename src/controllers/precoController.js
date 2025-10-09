@@ -8,16 +8,11 @@ const preencherAlimentos = async (req, res) => {
   try {
     const pool = await poolPromise;
 
-    // 1️⃣ Busca alimentos sem preço médio
     const result = await pool.request().query(`
-      SELECT TOP 1000 nome_alimento 
+      SELECT TOP 597 nome_alimento 
       FROM tbltacoNL 
       WHERE preco_medio IS NULL OR preco_medio = 0
     `);
-
-    if (result.recordset.length === 0) {
-      return res.status(200).json({ mensagem: 'Todos os alimentos já possuem preço médio definido.' });
-    }
 
     const alimentos = result.recordset.map(a => a.nome_alimento);
 
