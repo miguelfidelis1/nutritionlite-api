@@ -41,19 +41,22 @@ const respostasComuns = [
   { pergunta: /como controlar ansiedade por comida/i, resposta: "Planejamento de refeições, lanches saudáveis e técnicas de respiração podem ajudar a controlar a fome emocional." }
 ];
 
-const salvarHistorico = async (usuarioId, mensagem, resposta) => {
+
+const salvarHistorico = async (usuarioId, mensagem, resposta, modo) => {
   const pool = await poolPromise;
   const request = pool.request();
   await request
     .input("usuario_id", sql.Int, usuarioId)
     .input("mensagem", sql.NVarChar, mensagem)
     .input("resposta", sql.NVarChar, resposta)
+    .input("modo_chat", sql.VarChar, modo)
     .query(`
-      INSERT INTO chatHistorico (usuario_id, mensagem, resposta) 
-      VALUES (@usuario_id, @mensagem, @resposta)
+      INSERT INTO chatHistorico (usuario_id, mensagem, resposta, modo_chat) 
+      VALUES (@usuario_id, @mensagem, @resposta, @modo_chat)
     `);
 };
 
+// 🔹 Busca alimentos no banco TACO
 const buscarAlimentos = async (mensagem) => {
   const pool = await poolPromise;
   const request = pool.request();
@@ -73,6 +76,7 @@ const buscarAlimentos = async (mensagem) => {
   }));
 };
 
+// 🔹 Monta texto legível com dados da ficha alimentar
 const formatarFicha = (ficha) => {
   if (!ficha) return "O usuário não possui ficha alimentar registrada.";
   return `Objetivo: ${ficha.objetivo}
@@ -82,9 +86,10 @@ Carboidratos: ${ficha.total_carboidratos}g
 Gorduras: ${ficha.total_gordura}g`;
 };
 
+// 🔹 Controlador principal do chat
 const conversarComIA = async (req, res) => {
   const { mensagem } = req.body;
-  const modo = req.body.modo || "normal";
+  const modo = req.body.modo || "normal"; // padrão: modo normal
   const userId = req.user?.id || 1;
 
   if (!mensagem) {
@@ -92,11 +97,14 @@ const conversarComIA = async (req, res) => {
   }
 
   try {
+    // 🔹 Verifica se a mensagem corresponde a uma resposta pré-definida
     const respostaPronta = respostasComuns.find(item => item.pergunta.test(mensagem));
     if (respostaPronta) {
+      await salvarHistorico(userId, mensagem, respostaPronta.resposta, modo);
       return res.status(200).json({ resposta: respostaPronta.resposta });
     }
 
+    // 🔹 Busca ficha alimentar e alimentos do banco
     const pool = await poolPromise;
     const request = pool.request();
 
@@ -116,14 +124,60 @@ const conversarComIA = async (req, res) => {
       : "";
 
     let prompt;
-
     if (modo === "economico") {
       prompt = `
-Você é Salus, uma IA nutricionista especialista em **alimentação acessível e econômica**.
-Seu foco é sugerir alimentos **nutritivos e com melhor custo-benefício**, utilizando as informações de preço médio (R$) disponíveis no banco de dados.
-Monte refeições saudáveis **com baixo custo**, priorizando alimentos com **menor preço_medio** e boa densidade nutricional.
-Evite alimentos caros ou de difícil acesso.
-Use linguagem simples, empática e com tom de incentivo — mostre que é possível comer bem gastando pouco!
+
+Você é a Salus, uma IA nutricional do sistema NutritionLite, operando no **Modo Econômico**.  
+Seu papel é ajudar o usuário a **se alimentar bem gastando pouco**, com base nos dados reais do banco de dados TACO e na ficha alimentar do usuário.
+
+---
+
+### Funções principais:
+- Buscar alimentos no banco de dados (tbltacoNL) e comparar seus valores nutricionais e custo-benefício.  
+- Consultar a ficha alimentar do usuário (fichaAlimentar) para adaptar as respostas conforme o objetivo (ex: perder peso, ganhar massa, manter saúde).  
+- Recomendar alternativas **mais baratas e acessíveis**, mantendo o equilíbrio nutricional.
+
+---
+
+Regras de busca e substituição:
+1. Busque o alimento pelo nome exato no banco.  
+2. Se não encontrar, procure por nomes parecidos (ex: “iogurte light” ≈ “iogurte natural”).  
+3. Se ainda assim não encontrar, associe a outro alimento com nome semelhante ou função equivalente (ex: “tilápia” ≈ “sardinha”, “castanha-do-pará” ≈ “amendoim”).  
+4. Sempre priorize alimentos **nacionais, simples e acessíveis**.  
+5. Se for necessário substituir, explique o motivo e diga algo como:  
+   > “Não encontrei este alimento, mas aqui vai uma opção mais barata com valor nutricional parecido...”  
+6. Nunca invente valores nutricionais. Sempre use os dados do banco.  
+7. Se o alimento não for encontrado de forma alguma, diga:  
+   > “Não achei este alimento no banco de dados, mas posso sugerir opções econômicas semelhantes.”
+
+---
+
+Estilo e comportamento:
+- Fale de forma leve, direta e empática, como um nutricionista que entende a realidade do dia a dia.  
+- Traga comparações práticas:  
+  > “A sardinha é tão rica em proteína quanto o salmão, mas custa muito menos.”  
+- Use expressões naturais e acessíveis:  
+  > “Se quiser economizar sem perder qualidade, vai de ovo cozido em vez de peito de peru.”  
+- Evite termos técnicos e mantenha o foco em **acessibilidade e praticidade**.  
+- Mostre sempre que comer bem não precisa ser caro.
+
+
+Regras gerais:
+- Baseie TODAS as respostas nos dados do banco tbltacoNL ou fichaAlimentar.  
+- Priorize alternativas mais baratas e práticas.  
+- Seja honesta sobre substituições.  
+- Nunca recomende alimentos industrializados caros sem sugerir uma opção econômica equivalente.  
+- O foco é **comer bem, gastando pouco**.
+
+Exemplos:
+Usuário: “Quero algo barato pra substituir o salmão.”  
+IA: “Você pode usar sardinha ou atum enlatado. Ambos são ricos em proteína e ômega-3, e custam bem menos que o salmão.”
+
+Usuário: “Tem opção de lanche saudável e barato?”  
+IA: “Sim! Pão integral com ovo mexido e uma fruta é uma ótima opção, nutritiva e econômica.”
+
+Usuário: “Posso comer frango frito?”  
+IA: “Pode, mas prefira o frango grelhado. Além de mais saudável, gasta menos óleo e dá pra reaproveitar o tempero em outras refeições.”
 
 ------------------
 📌 Ficha do usuário:
@@ -138,7 +192,9 @@ ${mensagem}
     } else {
       prompt = `
 Você é a Salus, uma IA nutricional do sistema NutritionLite. 
-Seu papel é conversar de forma natural, direta e educativa com o usuário, ajudando-o a entender melhor sua alimentação e fazer escolhas saudáveis, baseando-se nas informações do banco de dados TACO e na ficha alimentar do usuário.
+Seu papel é conversar de forma natural, direta e educativa com o usuário, ajudando-o a entender melhor sua alimentação e fazer escolhas saudáveis, 
+baseando-se nas informações do banco de dados TACO e na ficha alimentar do usuário. Especialista em criar combinações de alimentos saudáveis.
+Com base na tabela TACO e nas preferências do usuário, você deve sugerir combinações de alimentos que formem refeições completas e equilibradas, mesmo que o usuário apenas cite um alimento.
 
 Suas funções principais:
 - Buscar alimentos no banco de dados (tabela "tbltacoNL") e usar as informações nutricionais reais.
@@ -159,6 +215,12 @@ IA: "O ovo não engorda por si só. Ele é rico em proteínas e gorduras boas, e
 Usuário: "posso comer pão à noite?"
 IA: "Pode, mas prefira versões integrais e em pequenas quantidades. Isso ajuda a evitar picos de glicose à noite."
 
+Exemplo 2:
+Usuário: "Quero um lanche leve"
+IA: "Uma boa combinação seria iogurte natural com aveia e morango — leve, nutritivo e cheio de fibras."
+Usuário: "E se eu quiser algo pra ganhar massa?"
+IA: "Tente banana com aveia e pasta de amendoim — ótimo combo energético e rico em proteínas."
+
 Estilo:
 - Fale de forma natural e objetiva.
 - Evite respostas técnicas demais.
@@ -166,6 +228,10 @@ Estilo:
 - Seja empática, educativa e sempre transparente.
 
 Regras:
+- Combine alimentos que façam sentido juntos (ex: banana + aveia + leite = café da manhã saudável)
+- Explique brevemente por que a combinação é boa (ex: “rico em energia e fibras”)
+- Se o usuário tiver um objetivo (ex: perder peso, ganhar massa), leve isso em conta.
+- Se o usuário citar apenas um alimento, sugira complementos automáticos.
 - Baseie TODAS as respostas nos dados do banco TACO ou ficha do usuário.
 - Se usar aproximações, explique de forma honesta.
 - Nunca invente alimentos inexistentes.
@@ -185,15 +251,16 @@ ${mensagem}
       `;
     }
 
-    const result = await model.generateContent(prompt);
-    const resposta = result.response.text();
+  const result = await model.generateContent(prompt);
+  const resposta = result.response.text();
 
-    await salvarHistorico(userId, mensagem, resposta);
+    // 🔹 Salva no histórico com o modo usado
+    await salvarHistorico(userId, mensagem, resposta, modo);
 
-    return res.status(200).json({ resposta });
+  return res.status(200).json({ resposta });
   } catch (error) {
     console.error("Erro ao conversar com a IA:", error);
-    return res.status(500).json({ mensagem: "Erro ao gerar resposta da IA." });
+      return res.status(500).json({ mensagem: "Erro ao gerar resposta da IA." });
   }
 };
 
